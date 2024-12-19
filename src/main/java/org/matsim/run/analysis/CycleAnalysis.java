@@ -57,9 +57,9 @@ import static tech.tablesaw.aggregate.AggregateFunctions.*;
 @CommandLine.Command(name = "cycle-highway", description = "Calculates various cycle highway related metrics.")
 @CommandSpec(
 	requireRunDirectory=true,
-	produces = {"mode_share.csv", "mode_share_base.csv", "mode_shift.csv", "bike_income_groups.csv", "bike_income_groups_base.csv", "allModes_income_groups_base_leipzig.csv",
+	produces = {"mode_share.csv", "mode_share_base.csv", "mode_shift.csv", "mean_travel_stats.csv", "bike_income_groups.csv", "bike_income_groups_base.csv", "allModes_income_groups_base_leipzig.csv",
 		"bike_income_groups_base_leipzig.csv", "car_income_groups_base_leipzig.csv", "walk_income_groups_base_leipzig.csv", "ride_income_groups_base_leipzig.csv", "traffic_stats_by_road_type_and_hour.csv",
-		"pt_income_groups_base_leipzig.csv", "cycle_highway_agents_trip_start_end.csv", "mean_travel_stats.csv", "cycle_highways.shp", "cyclist_demo_stats.csv", "traffic_stats_by_link_daily_bike.csv"}
+		"pt_income_groups_base_leipzig.csv", "cycle_highway_agents_trip_start_end.csv", "cycle_highways.shp", "cyclist_demo_stats.csv", "traffic_stats_by_link_daily_bike.csv"}
 )
 
 public class CycleAnalysis implements MATSimAppCommand {
@@ -69,8 +69,8 @@ public class CycleAnalysis implements MATSimAppCommand {
 	private InputOptions input = InputOptions.ofCommand(CycleAnalysis.class);
 	@CommandLine.Mixin
 	private OutputOptions output = OutputOptions.ofCommand(CycleAnalysis.class);
-	@CommandLine.Option(names = "--base-path", description = "Path to run directory of base case.", required = true)
-	private Path basePath;
+//	@CommandLine.Option(names = "--base-path", description = "Path to run directory of base case.", required = true)
+//	private Path basePath;
 	@CommandLine.Mixin
 	private ShpOptions shp;
 	@CommandLine.Option(names = "--highways-shp-path", description = "Path to run directory of base case.", required = false)
@@ -99,7 +99,7 @@ public class CycleAnalysis implements MATSimAppCommand {
 	private String baseURL = "";
 
 	public static void main(String[] args) {
-		new CycleAnalysis().execute(args);
+		new CycleAnalysis().execute();
 	}
 
 	@Override
@@ -111,81 +111,6 @@ public class CycleAnalysis implements MATSimAppCommand {
 		String tripsPath = globFile(input.getRunDirectory(), "*output_trips.csv.gz").toString();
 		String networkPath = globFile(input.getRunDirectory(), "*output_network.xml.gz").toString();
 		Set<String> modes = Collections.singleton("bike");
-
-		Network network = filterNetwork(NetworkUtils.readNetwork(networkPath), modes);
-
-		// Methods/classes from Traffic Analyss class in order to run function: calcCycleTrafficAnalysis
-		TravelTimeCalculator.Builder builder = new TravelTimeCalculator.Builder(network);
-		TravelTimeCalculator travelTimes = builder.build();
-		VolumesAnalyzer volumes = new VolumesAnalyzer(3600, 86400, network, true);
-		TrafficStatsCalculator calc = new TrafficStatsCalculator(network, travelTimes.getLinkTravelTimes(), 900);
-
-		Integer sample = 10; // test sample size - better to have this as argument and as SampleOptions data type.
-
-		Table ds = calcCycleTrafficAnalysis(network, calc, volumes, sample);
-
-		List<String> means = List.of("speed_performance_index", "congestion_index", "avg_speed", "road_capacity_utilization", "lane_km");
-		Table dailyMean = normalizeColumns(ds.summarize(means, mean).by("link_id"));
-
-		List<String> sums = ds.columnNames().stream().filter(s -> s.startsWith("vol_") || s.endsWith("_volume")).toList();
-		Table dailySum = normalizeColumns(ds.summarize(sums, sum).by("link_id"));
-
-		Table daily = dailyMean.joinOn("link_id").inner(dailySum);
-
-		daily.write().csv(output.getPath("traffic_stats_by_link_daily_bike.csv").toFile());
-
-		// Copy of table with all link links under one road_type
-		Table copy = ds.copy();
-		copy.stringColumn("road_type").set(Selection.withRange(0, ds.rowCount()), "all");
-		copy.forEach(ds::append);
-
-		Table perRoadTypeAndHour = Table.create(StringColumn.create("road_type"), IntColumn.create("hour"), DoubleColumn.create("congestion_index"));
-		Set<String> roadTypes = new HashSet<>(ds.stringColumn("road_type").asList());
-
-		for (int hour = 0; hour < 24; hour++) {
-
-			for (String roadType : roadTypes) {
-
-				double congestionIndex = calc.getNetworkCongestionIndex(hour * 3600, (hour + 1) * 3600, roadType.equals("all") ? null : roadType);
-
-				Row row = perRoadTypeAndHour.appendRow();
-				row.setString("road_type", roadType);
-				row.setInt("hour", hour);
-				row.setDouble("congestion_index", congestionIndex);
-			}
-		}
-
-		perRoadTypeAndHour
-			.sortOn("road_type", "hour")
-			.write().csv(output.getPath("traffic_stats_by_road_type_and_hour.csv").toFile());
-
-		Table dailyCongestionIndex = Table.create(StringColumn.create("road_type"), DoubleColumn.create("congestion_index"));
-
-		for (String roadType : roadTypes) {
-
-			double congestionIndex = calc.getNetworkCongestionIndex(0, 86400, roadType.equals("all") ? null : roadType);
-			Row row = dailyCongestionIndex.appendRow();
-			row.setString("road_type", roadType);
-			row.setDouble("congestion_index", congestionIndex);
-		}
-
-		Table perRoadType = dailyCongestionIndex.joinOn("road_type").leftOuter(
-			weightedMeanBy(ds, means, "road_type").rejectColumns("speed_performance_index", "congestion_index")
-		);
-
-		DoubleColumn meanLaneKm = perRoadType.doubleColumn("lane_km").divide(24).multiply(1000).round().divide(1000).setName("lane_km");
-		perRoadType.replaceColumn(meanLaneKm);
-
-		perRoadType.column("lane_km").setName("Total lane km");
-		perRoadType.column("road_type").setName("Road Type");
-		perRoadType.column("road_capacity_utilization").setName("Cap. Utilization");
-		perRoadType.column("avg_speed").setName("Avg. Speed [km/h]");
-		perRoadType.column("congestion_index").setName("Congestion Index");
-
-		roundColumns(perRoadType);
-		perRoadType
-			.sortOn("Road Type")
-			.write().csv(output.getPath( "traffic_stats_by_road_type_daily.csv").toFile());
 
 		EventsManager manager = EventsUtils.createEventsManager();
 		manager.addHandler(new CycleHighwayEventHandler());
@@ -244,7 +169,7 @@ public class CycleAnalysis implements MATSimAppCommand {
 
 
 //		calc modal split for base and policy
-		writeModeShare(trips, persons, distLabels,  "/mode_share.csv");
+		writeModeShare(trips, persons, distLabels,  "mode_share.csv");
 //		writeModeShare(baseTrips, basePersons, distLabels, "mode_share_base.csv");
 
 //		calc modal shift base to policy
@@ -255,18 +180,7 @@ public class CycleAnalysis implements MATSimAppCommand {
 //		Table baseJoined = new DataFrameJoiner(baseTrips, PERSON).inner(basePersons);
 
 //		write income group distr for mode bike in policy and base
-		writeIncomeGroups(joined, incomeLabels, TransportMode.bike, baseURL + "_income_groups.csv");
-//		writeIncomeGroups(baseJoined, incomeLabels, TransportMode.bike, "_income_groups_base.csv");
-//
-//		write income group distr for every mode in base (Leipzig)
-//		Table baseJoinedLeipzig = new DataFrameJoiner(baseTrips, PERSON).inner(basePersons);
-
-//		writeIncomeGroups(baseJoinedLeipzig, incomeLabels, "allModes", INCOME_SUFFIX);
-//		writeIncomeGroups(baseJoinedLeipzig, incomeLabels, TransportMode.bike, INCOME_SUFFIX);
-//		writeIncomeGroups(baseJoinedLeipzig, incomeLabels, TransportMode.car, INCOME_SUFFIX);
-//		writeIncomeGroups(baseJoinedLeipzig, incomeLabels, TransportMode.walk, INCOME_SUFFIX);
-//		writeIncomeGroups(baseJoinedLeipzig, incomeLabels, TransportMode.pt, INCOME_SUFFIX);
-//		writeIncomeGroups(baseJoinedLeipzig, incomeLabels, TransportMode.ride, INCOME_SUFFIX);
+		writeIncomeGroups(joined, incomeLabels, TransportMode.bike,  "_income_groups.csv");
 
 //		filter for bike trips
 		Table bikeJoined = filterModeAgents(joined, TransportMode.bike);
@@ -318,66 +232,6 @@ public class CycleAnalysis implements MATSimAppCommand {
 		return 0;
 	}
 
-	private Table calcCycleTrafficAnalysis(Network network, TrafficStatsCalculator calc, VolumesAnalyzer volumes, Integer sample) {
-		Table all = Table.create(
-			TextColumn.create("link_id"),
-			IntColumn.create("hour"),
-			StringColumn.create("road_type"),
-			DoubleColumn.create("lane_km"),
-			DoubleColumn.create("speed_performance_index"),
-			DoubleColumn.create("congestion_index"),
-			DoubleColumn.create("avg_speed"),
-			DoubleColumn.create("road_capacity_utilization"),
-			DoubleColumn.create("simulated_traffic_volume")
-		);
-
-		// Somehow Expensive operation
-		Set<String> allmodes = volumes.getModes();
-		Set<String> modes = new HashSet<>();
-
-		for (String mode : allmodes) {
-			if (mode.equals("bike")) {
-				modes.add(mode);
-			}
-		}
-
-		for (String mode : modes) {
-			all.addColumns(DoubleColumn.create("vol_" + mode));
-		}
-		for (Link link : network.getLinks().values()) {
-
-			double[] vol = volumes.getVolumesPerHourForLink(link.getId());
-
-			for (int h = 0; h < 24; h += 1) {
-				Row row = all.appendRow();
-
-				row.setString("link_id", link.getId().toString());
-				row.setInt("hour", h);
-				row.setString("road_type", NetworkUtils.getHighwayType(link));
-				row.setDouble("lane_km", (link.getLength() * link.getNumberOfLanes()) / 1000);
-
-				int startTime = h * 3600;
-				int endTime = (h + 1) * 3600;
-
-				row.setDouble("speed_performance_index", calc.getSpeedPerformanceIndex(link, startTime, endTime));
-				row.setDouble("congestion_index", calc.getLinkCongestionIndex(link, startTime, endTime));
-
-				// as km/h
-				row.setDouble("avg_speed", calc.getAvgSpeed(link, startTime, endTime) * 3.6);
-
-				double capacity = link.getCapacity() * sample;
-				row.setDouble("road_capacity_utilization", vol[h] / capacity);
-
-				row.setDouble("simulated_traffic_volume", vol[h] / sample);
-
-				for (String mode : modes) {
-					row.setDouble("vol_" + mode, volumes.getVolumesPerHourForLink(link.getId(), mode)[h] / sample);
-				}
-			}
-		}
-		return all;
-	}
-
 	private void calcAndWriteDemoStats(Table uniqueAgents) throws IOException {
 		IntColumn ageCol = uniqueAgents.intColumn("age");
 		double meanAge = ageCol.mean();
@@ -398,16 +252,16 @@ public class CycleAnalysis implements MATSimAppCommand {
 		double percentageMaleCyclists = (maleCyclists / numOfAgents) * 100;
 
 		DecimalFormat f = new DecimalFormat("0.00", new DecimalFormatSymbols(Locale.ENGLISH));
-		try (CSVPrinter printer = new CSVPrinter(new FileWriter(output.getPath(baseURL + "/cyclist_demo_stats.csv").toString()),
+		try (CSVPrinter printer = new CSVPrinter(new FileWriter(output.getPath("cyclist_demo_stats.csv").toString()),
 			CSVFormat.DEFAULT.builder()
 				.setQuote(null)
 				.setDelimiter(',')
 				.setRecordSeparator("\r\n")
 				.build())) {
-			printer.printRecord("\"mean age of cyclists\"", f.format(meanAge));
+			printer.printRecord("\"mean age of cyclists\"", f.format(Math.round(meanAge)));
 //			printer.printRecord("\"median age of cyclists\"", f.format(medianAge));
-			printer.printRecord("\"percentage of male bike riders\"", f.format(percentageMaleCyclists));
-			printer.printRecord("\"percentage of female bike riders\"", f.format(percentageFemaleCyclists));
+			printer.printRecord("\"percentage of male bike riders\"", f.format(Math.round(percentageMaleCyclists)));
+			printer.printRecord("\"percentage of female bike riders\"", f.format(Math.round(percentageFemaleCyclists)));
 		}
 	}
 
@@ -452,14 +306,14 @@ public class CycleAnalysis implements MATSimAppCommand {
 
 		//		write mean stats to csv
 		DecimalFormat f = new DecimalFormat("0.00", new DecimalFormatSymbols(Locale.ENGLISH));
-		System.out.println(basePath);
-		try (CSVPrinter printer = new CSVPrinter(new FileWriter(output.getPath(baseURL + "/mean_travel_stats.csv").toString()),
+//		System.out.println(basePath);
+		try (CSVPrinter printer = new CSVPrinter(new FileWriter(output.getPath("mean_travel_stats.csv").toString()),
 			CSVFormat.DEFAULT.builder()
 				.setQuote(null)
 				.setDelimiter(',')
 				.setRecordSeparator("\r\n")
 				.build())) {
-			printer.printRecord("\"mean travel distance\"", f.format(meanDist));
+			printer.printRecord("\"mean travel distance (in meters)\"", f.format(Math.round(meanDist)));
 //			printer.printRecord("\"median travel distance\"", f.format(medianDist));
 			printer.printRecord("\"mean travel time\"", meanTravTimeFormatted);
 //			printer.printRecord("\"median travel time\"", medianTravTimeFormatted);

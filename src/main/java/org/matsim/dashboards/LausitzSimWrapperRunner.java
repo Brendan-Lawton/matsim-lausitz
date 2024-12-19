@@ -46,6 +46,7 @@ import java.io.InterruptedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 
 @CommandLine.Command(
 	name = "simwrapper",
@@ -65,6 +66,10 @@ public final class LausitzSimWrapperRunner implements MATSimAppCommand {
 	private boolean noise;
 	@CommandLine.Option(names = "--trips", defaultValue = "false", description = "create trips dashboard")
 	private boolean trips;
+	@CommandLine.Option(names = "--bike", defaultValue = "false", description = "create bike dashboard")
+	private boolean bike;
+//	@CommandLine.Option(names = "--base-dir-bike", defaultValue = "false", description = "path for bike dashboard")
+//	private String baseDirBike;
 	@CommandLine.Option(names = "--emissions", defaultValue = "false", description = "create emission dashboard")
 	private boolean emissions;
 	@CommandLine.Option(names = "--pt-line-base-dir", description = "create pt line dashboard with base run dir as input")
@@ -84,7 +89,7 @@ public final class LausitzSimWrapperRunner implements MATSimAppCommand {
 	@Override
 	public Integer call() throws Exception {
 
-		if (!noise && !trips && !emissions && baseDir == null){
+		if (!noise && !trips && !bike && !emissions && baseDir == null){
 			throw new IllegalArgumentException("you have not configured any dashboard to be created! Please use command line parameters!");
 		}
 
@@ -154,6 +159,10 @@ public final class LausitzSimWrapperRunner implements MATSimAppCommand {
 
 			if (baseDir != null) {
 				sw.addDashboard(new PtLineDashboard(baseDir));
+			}
+
+			if (bike) {
+				sw.addDashboard(new CycleAnalysisDashboard());
 			}
 
 			try {

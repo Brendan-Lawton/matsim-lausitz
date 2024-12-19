@@ -8,10 +8,10 @@
 	</module>
 
 	<module name="controller">
-		<param name="lastIteration" value="500"/>
-		<param name="overwriteFiles" value="failIfDirectoryExists"/>
-		<param name="runId" value="lausitz-10pct"/>
-		<param name="outputDirectory" value="./output/output-lausitz-10pct"/>
+		<param name="lastIteration" value="0"/>
+		<param name="overwriteFiles" value="deleteDirectoryIfExists"/>
+		<param name="runId" value="lausitz-1pct"/>
+		<param name="outputDirectory" value="./output/output-lausitz-1pct"/>
 		<param name="writeEventsInterval" value="100"/>
 		<param name="writePlansInterval" value="100"/>
 		<param name="enableLinkToLinkRouting" value="false"/>
@@ -21,7 +21,7 @@
 	<module name="global">
 		<param name="coordinateSystem" value="EPSG:25832"/>
 		<param name="insistingOnDeprecatedConfigVersion" value="false"/>
-		<param name="numberOfThreads" value="12"/>
+		<param name="numberOfThreads" value="2"/>
 	</module>
 
 	<module name="network">
@@ -32,7 +32,7 @@
 
 	<module name="plans">
 		<param name="inputPlansFile"
-			   value="https://svn.vsp.tu-berlin.de/repos/public-svn/matsim/scenarios/countries/de/lausitz/input/v2024.2/lausitz-v2024.2-10pct.plans-initial.xml.gz"/>
+			   value="https://svn.vsp.tu-berlin.de/repos/public-svn/matsim/scenarios/countries/de/lausitz/input/v2024.2/lausitz-v2024.2-0.1pct.plans-initial.xml.gz"/>
 		<param name="removingUnnecessaryPlanAttributes" value="true"/>
 	</module>
 
@@ -66,7 +66,7 @@
 		<param name="flowCapacityFactor" value="0.1"/>
 		<param name="storageCapacityFactor" value="0.1"/>
 		<param name="mainMode" value="car,bike,longDistanceFreight"/>
-		<param name="numberOfThreads" value="12"/>
+		<param name="numberOfThreads" value="2"/>
 		<param name="startTime" value="00:00:00"/>
 		<param name="stuckTime" value="30.0"/>
 		<param name="trafficDynamics" value="kinematicWaves"/>

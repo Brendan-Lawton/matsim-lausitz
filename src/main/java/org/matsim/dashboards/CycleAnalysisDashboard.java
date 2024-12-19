@@ -16,7 +16,7 @@ import java.util.List;
  * It also compares the agents and their trips using the cycle highways with their respective trips in the base case.
  */
 public class CycleAnalysisDashboard implements Dashboard {
-//	private final String basePath;
+	private final String basePath;
 //	private final String networkPath;
 	private static final String SHARE = "share";
 	private static final String ABSOLUTE = "Count [trip_id]";
@@ -27,13 +27,13 @@ public class CycleAnalysisDashboard implements Dashboard {
 	private static final String TRAFFIC = "bike_traffic";
 
 
-//	public CycleAnalysisDashboard(String basePath) {
-//		if (!basePath.endsWith("/")) {
-//			basePath += "/";
-//		}
-//
-//		this.basePath = basePath;
-//	}
+	public CycleAnalysisDashboard(String basePath) {
+		if (!basePath.endsWith("/")) {
+			basePath += "/";
+		}
+
+		this.basePath = basePath;
+	}
 
 	@Override
 	public void configure(Header header, Layout layout) {
@@ -41,7 +41,7 @@ public class CycleAnalysisDashboard implements Dashboard {
 		header.description = "Shows statistics about agents, who used bike as their main mode.";
 
 //		String shp = "/home/brendan/git/matsim-lausitz/output/output-lausitz-1pct/lausitz-1pct.output_network.xml.gz";
-//		String[] args = new ArrayList<>(List.of("--base-path", basePath)).toArray(new String[0]);
+		String[] args = new ArrayList<>(List.of("--base-path", basePath)).toArray(new String[0]);
 //		CycleAnalysis CycleAnalysis = new CycleAnalysis();
 		layout.row("first")
 			.el(Tile.class, (viz, data) -> {
@@ -80,7 +80,7 @@ public class CycleAnalysisDashboard implements Dashboard {
 				);
 			});
 
-//		createIncomeLayouts(layout, args);
+		createIncomeLayouts(layout, args);
 
 //		layout.row("Avg. Speed")
 //			.el(MapPlot.class, (viz, data) -> {

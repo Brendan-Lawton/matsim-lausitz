@@ -162,7 +162,7 @@ public final class LausitzSimWrapperRunner implements MATSimAppCommand {
 			}
 
 			if (bike) {
-				sw.addDashboard(new CycleAnalysisDashboard());
+				sw.addDashboard(new CycleAnalysisDashboard(config.controller().getOutputDirectory()));
 			}
 
 			try {

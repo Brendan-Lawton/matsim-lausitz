@@ -2,9 +2,8 @@ package org.matsim.dashboards;
 
 import org.matsim.application.analysis.traffic.TrafficAnalysis;
 import org.matsim.run.analysis.CycleAnalysis;
-import org.matsim.simwrapper.Dashboard;
+import org.matsim.simwrapper.*;
 import org.matsim.simwrapper.Header;
-import org.matsim.simwrapper.Layout;
 import org.matsim.simwrapper.viz.*;
 import tech.tablesaw.plotly.traces.BarTrace;
 
@@ -17,7 +16,6 @@ import java.util.List;
  */
 public class CycleAnalysisDashboard implements Dashboard {
 	private final String basePath;
-//	private final String networkPath;
 	private static final String SHARE = "share";
 	private static final String ABSOLUTE = "Count [trip_id]";
 	private static final String INCOME_GROUP = "income_group";
@@ -82,27 +80,26 @@ public class CycleAnalysisDashboard implements Dashboard {
 
 		createIncomeLayouts(layout, args);
 
-//		layout.row("Avg. Speed")
-//			.el(MapPlot.class, (viz, data) -> {
-//
-//				viz.title = "Simulated Average Speed per Link by bike";
-//				viz.center = data.context().getCenter();
-//				viz.zoom = data.context().mapZoomLevel;
-//				viz.height = 7.5;
-//				viz.width = 2.0;
-//				viz.setShape(networkPath, "id");
-//				viz.addDataset(TRAFFIC, data.compute(TrafficAnalysis.class, "traffic_stats_by_link_daily.csv"));
-////				viz.display.lineColor.dataset = TRAFFIC;
-//				viz.display.lineColor.columnName = "avg_speed";
-//				viz.display.lineColor.join = "link_id";
-//				viz.display.lineColor.setColorRamp(ColorScheme.RdYlBu, 5, true);
-//
-////				viz.display.lineWidth.dataset = TRAFFIC;
-//				viz.display.lineWidth.columnName = "avg_speed";
-//				viz.display.lineWidth.scaleFactor = 5000d;
-//				viz.display.lineWidth.join = "link_id";
-//
-//			});
+		layout.row("Avg. Speed")
+			.el(MapPlot.class, (viz, data) -> {
+
+				viz.title = "Simulated Average Speed per Link by bike";
+				viz.center = data.context().getCenter();
+				viz.zoom = data.context().mapZoomLevel;
+				viz.height = 7.5;
+				viz.width = 2.0;
+				viz.setShape("/analysis/network/network.avro", "id");
+				viz.addDataset(TRAFFIC, data.compute(CycleAnalysis.class, "traffic_stats_by_link_daily_bike.csv"));
+				viz.display.lineColor.dataset = TRAFFIC;
+				viz.display.lineColor.columnName = "avg_speed";
+				viz.display.lineColor.join = "link_id";
+				viz.display.lineColor.setColorRamp(ColorScheme.RdYlBu, 3, true);
+				viz.display.lineWidth.dataset = TRAFFIC;
+				viz.display.lineWidth.columnName = "avg_speed";
+				viz.display.lineWidth.scaleFactor = 15d;
+				viz.display.lineWidth.join = "link_id";
+
+			});
 
 	}
 

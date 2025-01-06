@@ -10,18 +10,15 @@ import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
-import org.matsim.analysis.VolumesAnalyzer;
 import org.matsim.api.core.v01.Id;
 import org.matsim.api.core.v01.TransportMode;
 import org.matsim.api.core.v01.events.LinkEnterEvent;
 import org.matsim.api.core.v01.events.PersonEntersVehicleEvent;
 import org.matsim.api.core.v01.events.handler.LinkEnterEventHandler;
 import org.matsim.api.core.v01.events.handler.PersonEntersVehicleEventHandler;
-import org.matsim.api.core.v01.network.Link;
 import org.matsim.api.core.v01.network.Network;
 import org.matsim.application.CommandSpec;
 import org.matsim.application.MATSimAppCommand;
-import org.matsim.application.analysis.traffic.TrafficStatsCalculator;
 import org.matsim.application.options.CsvOptions;
 import org.matsim.application.options.InputOptions;
 import org.matsim.application.options.OutputOptions;
@@ -30,9 +27,7 @@ import org.matsim.core.api.experimental.events.EventsManager;
 import org.matsim.core.config.groups.NetworkConfigGroup;
 import org.matsim.core.events.EventsUtils;
 import org.matsim.core.events.MatsimEventsReader;
-import org.matsim.core.network.NetworkUtils;
 import org.matsim.core.network.filter.NetworkFilterManager;
-import org.matsim.core.trafficmonitoring.TravelTimeCalculator;
 import org.matsim.core.utils.io.IOUtils;
 import org.matsim.vehicles.Vehicle;
 import picocli.CommandLine;
@@ -44,7 +39,6 @@ import tech.tablesaw.selection.Selection;
 
 import java.io.FileWriter;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.time.format.DateTimeFormatter;
@@ -110,6 +104,7 @@ public class CycleAnalysis implements MATSimAppCommand {
 		String personsPath = globFile(input.getRunDirectory(), "*output_persons.csv.gz").toString();
 		String tripsPath = globFile(input.getRunDirectory(), "*output_trips.csv.gz").toString();
 		String networkPath = globFile(input.getRunDirectory(), "*output_network.xml.gz").toString();
+		String trafficCsvPath = input.getRunDirectory() + "/analysis/traffic/traffic_stats_by_link_daily.csv";
 		Set<String> modes = Collections.singleton("bike");
 
 		EventsManager manager = EventsUtils.createEventsManager();
@@ -135,6 +130,20 @@ public class CycleAnalysis implements MATSimAppCommand {
 			.columnTypesPartial(columnTypes)
 			.sample(false)
 			.separator(CsvOptions.detectDelimiter(tripsPath)).build());
+
+		Map<String, ColumnType> trafficColumnTypes = new HashMap<>(Map.ofEntries(Map.entry("link_id", ColumnType.TEXT), Map.entry("lane_km", ColumnType.DOUBLE), Map.entry("road_capacity_utilization", ColumnType.DOUBLE),
+			Map.entry("avg_speed", ColumnType.DOUBLE), Map.entry("congestion_index", ColumnType.DOUBLE), Map.entry("speed_performance_index", ColumnType.DOUBLE),
+			Map.entry("simulated_traffic_volume", ColumnType.DOUBLE), Map.entry("vol_truck40t", ColumnType.DOUBLE), Map.entry("vol_truck8t", ColumnType.DOUBLE),
+			Map.entry("vol_longDistanceFreight", ColumnType.DOUBLE), Map.entry("vol_truck18t", ColumnType.DOUBLE), Map.entry("vol_bike", ColumnType.DOUBLE), Map.entry("vol_car", ColumnType.DOUBLE)));
+
+		Table traffic = Table.read().csv(CsvReadOptions.builder(IOUtils.getBufferedReader(trafficCsvPath))
+			.columnTypesPartial(trafficColumnTypes)
+			.sample(false)
+			.separator(CsvOptions.detectDelimiter(trafficCsvPath)).build());
+
+		Table bikeTraffic = filterBikeTrafficCsv(traffic);
+
+
 
 //		only analyze person agents
 //		basePersons = filterPersonAgents(basePersons);
@@ -228,6 +237,8 @@ public class CycleAnalysis implements MATSimAppCommand {
 		calcAndWriteDemoStats(uniquePersonsBikeJoined);
 
 //		writeHighwaysShpFile();
+		bikeTraffic.write().csv(input.getRunDirectory() + "/analysis/analysis/traffic_stats_by_link_daily_bike.csv");
+
 
 		return 0;
 	}
@@ -439,6 +450,11 @@ public class CycleAnalysis implements MATSimAppCommand {
 				}
 			}
 		}
+	}
+
+	private Table filterBikeTrafficCsv(Table traffic) {
+		Table bikeTraffic = traffic.where(traffic.numberColumn("vol_bike").isGreaterThan(0.0));
+		return bikeTraffic;
 	}
 
 	private List<String> getLabels(List<Double> groups) {

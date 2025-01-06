@@ -33,6 +33,7 @@ import org.matsim.core.scenario.ScenarioUtils;
 import org.matsim.run.prepare.PrepareNetwork;
 import org.matsim.run.scenarios.LausitzScenario;
 import org.matsim.simwrapper.Dashboard;
+import org.matsim.simwrapper.Data;
 import org.matsim.simwrapper.SimWrapper;
 import org.matsim.simwrapper.SimWrapperConfigGroup;
 import org.matsim.simwrapper.dashboard.EmissionsDashboard;
@@ -162,6 +163,7 @@ public final class LausitzSimWrapperRunner implements MATSimAppCommand {
 			}
 
 			if (bike) {
+				Data test = sw.getData();
 				sw.addDashboard(new CycleAnalysisDashboard(config.controller().getOutputDirectory()));
 			}
 

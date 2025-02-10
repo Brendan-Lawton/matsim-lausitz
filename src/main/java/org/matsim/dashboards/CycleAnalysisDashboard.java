@@ -1,6 +1,5 @@
 package org.matsim.dashboards;
 
-import org.matsim.application.analysis.traffic.TrafficAnalysis;
 import org.matsim.run.analysis.CycleAnalysis;
 import org.matsim.simwrapper.*;
 import org.matsim.simwrapper.Header;
@@ -10,12 +9,15 @@ import tech.tablesaw.plotly.traces.BarTrace;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.matsim.application.ApplicationUtils.globFile;
+
 /**
  * Shows information about an optional policy case, which implements cycle highways in Leipzig.
  * It also compares the agents and their trips using the cycle highways with their respective trips in the base case.
  */
 public class CycleAnalysisDashboard implements Dashboard {
 	private final String basePath;
+	private final String networkPath;
 	private static final String SHARE = "share";
 	private static final String ABSOLUTE = "Count [trip_id]";
 	private static final String INCOME_GROUP = "income_group";
@@ -25,10 +27,12 @@ public class CycleAnalysisDashboard implements Dashboard {
 	private static final String TRAFFIC = "bike_traffic";
 
 
-	public CycleAnalysisDashboard(String basePath) {
+	public CycleAnalysisDashboard(String basePath, String networkPath) {
 		if (!basePath.endsWith("/")) {
 			basePath += "/";
 		}
+
+		this.networkPath = networkPath;
 
 		this.basePath = basePath;
 	}
@@ -40,7 +44,6 @@ public class CycleAnalysisDashboard implements Dashboard {
 
 //		String shp = "/home/brendan/git/matsim-lausitz/output/output-lausitz-1pct/lausitz-1pct.output_network.xml.gz";
 		String[] args = new ArrayList<>(List.of("--base-path", basePath)).toArray(new String[0]);
-//		CycleAnalysis CycleAnalysis = new CycleAnalysis();
 		layout.row("first")
 			.el(Tile.class, (viz, data) -> {
 				viz.dataset = data.compute(CycleAnalysis.class, "mean_travel_stats.csv");
@@ -64,10 +67,6 @@ public class CycleAnalysisDashboard implements Dashboard {
 					.constant(SOURCE, "Base case")
 					.aggregate(List.of(MAIN_MODE), SHARE, Plotly.AggrFunc.SUM);
 
-//				Plotly.DataSet dsBase = viz.addDataset(data.compute(CycleAnalysis.class, "mode_share_base.csv", args))
-//					.constant(SOURCE, "Base")
-//					.aggregate(List.of(MAIN_MODE), SHARE, Plotly.AggrFunc.SUM);
-
 				viz.mergeDatasets = true;
 
 				viz.addTrace(BarTrace.builder(Plotly.OBJ_INPUT, Plotly.INPUT).orientation(BarTrace.Orientation.HORIZONTAL).build(),
@@ -78,7 +77,10 @@ public class CycleAnalysisDashboard implements Dashboard {
 				);
 			});
 
-		createIncomeLayouts(layout, args);
+		createDistrobutionDataLayouts(layout, "bike_income_groups.csv","Bike users per income group","Income Group","Share Agents", "income_group", "age_income_row");
+		createDistrobutionDataLayouts(layout, "bike_age_groups.csv", "Bike users per age group", "Age Group","Share Agents", "age_group", "age_income_row");
+		createDistrobutionDataLayouts(layout, "bike_traveled_distance_groups.csv", "Bike users per traveled distance", "Traveled Distance","Share Agents", "traveled_distance_group", "trav_distAndTime_row");
+		createDistrobutionDataLayouts(layout, "bike_travel_time_groups.csv", "Bike users per traveled distance", "Travel Time","Share Agents", "trav_time_group", "trav_distAndTime_row");
 
 		layout.row("Avg. Speed")
 			.el(MapPlot.class, (viz, data) -> {
@@ -88,7 +90,7 @@ public class CycleAnalysisDashboard implements Dashboard {
 				viz.zoom = data.context().mapZoomLevel;
 				viz.height = 7.5;
 				viz.width = 2.0;
-				viz.setShape("/analysis/network/network.avro", "id");
+				viz.setShape(networkPath, "id");
 				viz.addDataset(TRAFFIC, data.compute(CycleAnalysis.class, "traffic_stats_by_link_daily_bike.csv"));
 				viz.display.lineColor.dataset = TRAFFIC;
 				viz.display.lineColor.columnName = "avg_speed";
@@ -103,15 +105,15 @@ public class CycleAnalysisDashboard implements Dashboard {
 
 	}
 
-	private static void createIncomeLayouts(Layout layout, String[] args) {
-		layout.row("income")
+	private static void createDistrobutionDataLayouts(Layout layout, String data_file, String title, String xAxis, String yAxis, String group_name, String row_name) {
+		layout.row(row_name)
 			.el(Bar.class, (viz, data) -> {
-				viz.title = "Bike users per income group - Policy";
+				viz.title = title;
 				viz.stacked = false;
-				viz.dataset = data.compute(CycleAnalysis.class, "bike_income_groups.csv");
-				viz.x = INCOME_GROUP;
-				viz.xAxisName = "Income Group";
-				viz.yAxisName = "Share Agents";
+				viz.dataset = data.compute(CycleAnalysis.class, data_file);
+				viz.x = group_name;
+				viz.xAxisName = xAxis;
+				viz.yAxisName = yAxis;
 				viz.columns = List.of(SHARE);
 			});
 

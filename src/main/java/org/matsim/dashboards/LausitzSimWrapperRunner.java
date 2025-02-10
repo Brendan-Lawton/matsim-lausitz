@@ -69,8 +69,8 @@ public final class LausitzSimWrapperRunner implements MATSimAppCommand {
 	private boolean trips;
 	@CommandLine.Option(names = "--bike", defaultValue = "false", description = "create bike dashboard")
 	private boolean bike;
-//	@CommandLine.Option(names = "--base-dir-bike", defaultValue = "false", description = "path for bike dashboard")
-//	private String baseDirBike;
+	@CommandLine.Option(names = "--avroNetwork", description = "add avro network if available")
+	private String avroNetwork; // network path must be relative to dashboard file (normally analysis/network/network.avro)
 	@CommandLine.Option(names = "--emissions", defaultValue = "false", description = "create emission dashboard")
 	private boolean emissions;
 	@CommandLine.Option(names = "--pt-line-base-dir", description = "create pt line dashboard with base run dir as input")
@@ -163,8 +163,10 @@ public final class LausitzSimWrapperRunner implements MATSimAppCommand {
 			}
 
 			if (bike) {
-				Data test = sw.getData();
-				sw.addDashboard(new CycleAnalysisDashboard(config.controller().getOutputDirectory()));
+				String networkPath = ApplicationUtils.matchInput("output_network.xml.gz", runDirectory).toString();
+				String[] networkPathChunks = networkPath.split("/");
+				networkPath = networkPathChunks[networkPathChunks.length - 1];
+				sw.addDashboard(new CycleAnalysisDashboard(config.controller().getOutputDirectory(), Objects.requireNonNullElse(avroNetwork, networkPath)));
 			}
 
 			try {

@@ -51,9 +51,9 @@ import static tech.tablesaw.aggregate.AggregateFunctions.*;
 @CommandLine.Command(name = "cycle-highway", description = "Calculates various cycle highway related metrics.")
 @CommandSpec(
 	requireRunDirectory=true,
-	produces = {"mode_share.csv", "mode_share_base.csv", "mode_shift.csv", "mean_travel_stats.csv", "bike_income_groups.csv", "bike_income_groups_base.csv", "allModes_income_groups_base_leipzig.csv",
-		"bike_income_groups_base_leipzig.csv", "car_income_groups_base_leipzig.csv", "walk_income_groups_base_leipzig.csv", "ride_income_groups_base_leipzig.csv", "traffic_stats_by_road_type_and_hour.csv",
-		"pt_income_groups_base_leipzig.csv", "cycle_highway_agents_trip_start_end.csv", "cycle_highways.shp", "cyclist_demo_stats.csv", "traffic_stats_by_link_daily_bike.csv"}
+	produces = {"mode_share.csv", "mode_share_base.csv", "mode_shift.csv", "mean_travel_stats.csv", "bike_income_groups.csv", "bike_age_groups.csv",
+		"bike_traveled_distance_groups.csv", "bike_travel_time_groups.csv", "traffic_stats_by_road_type_and_hour.csv", "cyclist_demo_stats.csv",
+		"traffic_stats_by_link_daily_bike.csv"}
 )
 
 public class CycleAnalysis implements MATSimAppCommand {
@@ -71,10 +71,14 @@ public class CycleAnalysis implements MATSimAppCommand {
 	private String highwaysShpPath;
 	@CommandLine.Option(names = "--crs", description = "CRS for shp files.", defaultValue = "EPSG:25832")
 	private String crs;
-	@CommandLine.Option(names = "--dist-groups", split = ",", description = "List of distances for binning", defaultValue = "0.,1000.,2000.,5000.,10000.,20000.")
+	@CommandLine.Option(names = "--dist-groups", split = ",", description = "List of distances for binning.", defaultValue = "0.,1000.,2000.,5000.,10000.,20000.")
 	private List<Double> distGroups;
+	@CommandLine.Option(names = "--travTime-groups", split = ",", description = "List of distances for binning.", defaultValue = "00:00:00,00:30:00,00:60:00,01:00:00,01:30:00,01:45:00,02:00:00")
+	private List<String> travTimeGroups;
 	@CommandLine.Option(names = "--income-groups", split = ",", description = "List of income for binning. Derived from SrV 2018.", defaultValue = "0.,500.,900.,1500.,2000.,2600.,3000.,3600.,4600.,5600.")
 	private List<Double> incomeGroups;
+	@CommandLine.Option(names = "--age-groups", split = ",", description = "List of ages for binning.", defaultValue = "0.,10.,20.,30.,40.,50.,60.,70.,80.,90.")
+	private List<Double> ageGroups;
 
 	List<String> modeOrder = null;
 	//	cannot use the original String from class CreateBicycleHighwayNetwork because the class is on another branch. In the matsim version of this branch Simwrapper was not yet implemented
@@ -82,6 +86,7 @@ public class CycleAnalysis implements MATSimAppCommand {
 	private static final String INCOME_SUFFIX = "_income_groups_base_leipzig.csv";
 	private static final String PERSON = "person";
 	private static final String INCOME = "income";
+	private static final String AGE_GROUP = "age";
 	private static final String TRAV_TIME = "trav_time";
 	private static final String TRAV_DIST = "traveled_distance";
 	private static final String MAIN_MODE = "main_mode";
@@ -117,7 +122,7 @@ public class CycleAnalysis implements MATSimAppCommand {
 
 //		read necessary tables
 		Table persons = Table.read().csv(CsvReadOptions.builder(IOUtils.getBufferedReader(personsPath))
-			.columnTypesPartial(Map.of(PERSON, ColumnType.TEXT, INCOME, ColumnType.DOUBLE, "subpopulation", ColumnType.TEXT))
+			.columnTypesPartial(Map.of(PERSON, ColumnType.TEXT, INCOME, ColumnType.DOUBLE, AGE_GROUP, ColumnType.DOUBLE, "subpopulation", ColumnType.TEXT))
 			.sample(false)
 			.separator(CsvOptions.detectDelimiter(personsPath)).build());
 
@@ -144,52 +149,43 @@ public class CycleAnalysis implements MATSimAppCommand {
 		Table bikeTraffic = filterBikeTrafficCsv(traffic);
 
 
-
 //		only analyze person agents
-//		basePersons = filterPersonAgents(basePersons);
 		persons = filterPersonAgents(persons);
 
 
 //		create labels for dist and income groups
 		List<String> distLabels = getLabels(distGroups);
 		List<String> incomeLabels = getLabels(incomeGroups);
+		List<String> ageLabels = getLabels(ageGroups);
+		List<String> travTimeLabels = getStringLabels(travTimeGroups);
 
-//		add group columns for dist and income
-//		addGroupColumn(basePersons, INCOME, incomeGroups, incomeLabels);
-		addGroupColumn(persons, INCOME, incomeGroups, incomeLabels);
-
-//		filter Leipzig agents
-//		Table basePersonsLeipzig = filterLeipzigAgents(basePersons);
-//		Table personsLeipzig = filterLeipzigAgents(persons);
-
-//		the 2 populations should consist of the same persons
-//		if (basePersonsLeipzig.rowCount() != personsLeipzig.rowCount()) {
-//			log.fatal("Number of agents living in Leipzig for base ({}) and policy case ({}) are not the same!", basePersonsLeipzig.rowCount(), personsLeipzig.rowCount());
-//			throw new IllegalStateException();
-//		}
 
 		// Use longest_distance_mode where main_mode is not present
 		trips.stringColumn(MAIN_MODE)
 			.set(trips.stringColumn(MAIN_MODE).isMissing(),
 				trips.stringColumn(LONG_MODE));
-//		baseTrips.stringColumn(MAIN_MODE)
-//			.set(baseTrips.stringColumn(MAIN_MODE).isMissing(),
-//				baseTrips.stringColumn(LONG_MODE));
 
-
-//		calc modal split for base and policy
+		//		calc modal split for base and policy
 		writeModeShare(trips, persons, distLabels,  "mode_share.csv");
-//		writeModeShare(baseTrips, basePersons, distLabels, "mode_share_base.csv");
 
-//		calc modal shift base to policy
-//		writeModeShift(trips, baseTrips);
+		// 		add group columns for dist and income
+		addGroupColumn(persons, INCOME, incomeGroups, incomeLabels);
+		addGroupColumn(persons, AGE_GROUP, ageGroups, ageLabels);
+		addGroupColumn(trips, TRAV_DIST, distGroups, distLabels);
+		addGroupStringColumn(trips, TRAV_TIME, travTimeGroups, travTimeLabels);
 
-//		join persons and trips
+
+		//		join persons and trips
 		Table joined = new DataFrameJoiner(trips, PERSON).inner(persons);
-//		Table baseJoined = new DataFrameJoiner(baseTrips, PERSON).inner(basePersons);
+		//		Table baseJoined = new DataFrameJoiner(baseTrips, PERSON).inner(basePersons);
 
-//		write income group distr for mode bike in policy and base
-		writeIncomeGroups(joined, incomeLabels, TransportMode.bike,  "_income_groups.csv");
+		//		write income group distr for mode bike in policy and base
+
+		writeGroups(joined, incomeLabels, TransportMode.bike,  "_income_groups.csv", "income_group");
+		writeGroups(joined, ageLabels, TransportMode.bike,  "_age_groups.csv", "age_group");
+		writeGroups(joined, distLabels, TransportMode.bike,  "_traveled_distance_groups.csv", "traveled_distance_group");
+		writeGroups(joined, travTimeLabels, TransportMode.bike,  "_travel_time_groups.csv", "trav_time_group");
+
 
 //		filter for bike trips
 		Table bikeJoined = filterModeAgents(joined, TransportMode.bike);
@@ -204,22 +200,8 @@ public class CycleAnalysis implements MATSimAppCommand {
 //			waiting time already included in travel time
 			int travelTime = durationToSeconds(row.getString(TRAV_TIME));
 			row.setString(TRAV_TIME, Integer.toString(travelTime));
-			System.out.println(row.getString(TRAV_TIME));
-//			List<Integer> enterTimes = highwayPersons.get(row.getString(PERSON));
-
-//			for (int enterTime : enterTimes) {
-//				if (Range.of(tripStart, tripStart + travelTime).contains(enterTime)) {
-//					idx.add(i);
-//				}
-//			}
 		}
-//		write trip start and end of every trip using cycle highway to csv
-//		bikeJoined = bikeJoined.where(Selection.with(idx.toIntArray())).selectColumns(PERSON, "start_x", "start_y", "end_x", "end_y");
-//		bikeJoined.write().csv(output.getPath("cycle_highway_agents_trip_start_end.csv").toFile());
 
-//		here: filter base trip ids for trip ids of bikeJoined
-//		TextColumn tripIdCol = baseJoined.textColumn(TRIP_ID);
-//		baseJoined = baseJoined.where(tripIdCol.isIn(bikeJoined.textColumn(TRIP_ID)));
 
 		Column<?> uniquePersons = bikeJoined.column("person").unique();
 
@@ -244,7 +226,7 @@ public class CycleAnalysis implements MATSimAppCommand {
 	}
 
 	private void calcAndWriteDemoStats(Table uniqueAgents) throws IOException {
-		IntColumn ageCol = uniqueAgents.intColumn("age");
+		DoubleColumn ageCol = uniqueAgents.doubleColumn("age");
 		double meanAge = ageCol.mean();
 		double medianAge = ageCol.median();
 		double maleCyclists = 0;
@@ -317,7 +299,6 @@ public class CycleAnalysis implements MATSimAppCommand {
 
 		//		write mean stats to csv
 		DecimalFormat f = new DecimalFormat("0.00", new DecimalFormatSymbols(Locale.ENGLISH));
-//		System.out.println(basePath);
 		try (CSVPrinter printer = new CSVPrinter(new FileWriter(output.getPath("mean_travel_stats.csv").toString()),
 			CSVFormat.DEFAULT.builder()
 				.setQuote(null)
@@ -390,21 +371,20 @@ public class CycleAnalysis implements MATSimAppCommand {
 		}
 	}
 
-	private void writeIncomeGroups(Table joined, List<String> incomeLabels, String mode, String outputFile) {
-
-//		only filter if specific mode is given
+	private void writeGroups(Table joined, List<String> labels, String mode, String outputFile, String columnName) {
+		//		only filter if specific mode is given
 		if (!mode.equals("allModes")){
 			joined = filterModeAgents(joined, mode);
 		}
 
-		Table aggr = joined.summarize(TRIP_ID, count).by("income_group");
+		Table aggr = joined.summarize(TRIP_ID, count).by(columnName);
 
 		DoubleColumn countColumn = aggr.doubleColumn("Count [trip_id]");
 		DoubleColumn share = countColumn.divide(countColumn.sum()).setName("share");
 		aggr.addColumns(share);
 
 		// Sort by income_group
-		Comparator<Row> cmp = Comparator.comparingInt(row -> incomeLabels.indexOf(row.getString("income_group")));
+		Comparator<Row> cmp = Comparator.comparingInt(row -> labels.indexOf(row.getString(columnName)));
 		aggr = aggr.sortOn(cmp);
 
 		aggr.write().csv(output.getPath(mode + outputFile).toFile());
@@ -462,8 +442,18 @@ public class CycleAnalysis implements MATSimAppCommand {
 		for (int i = 0; i < groups.size() - 1; i++) {
 			labels.add(String.format("%d - %d", groups.get(i).intValue(), groups.get(i + 1).intValue()));
 		}
-		labels.add(groups.get(groups.size() - 1) + "+");
+		labels.add(groups.getLast() + "+");
 		groups.add(Double.MAX_VALUE);
+		return labels;
+	}
+
+	private List<String> getStringLabels(List<String> groups) {
+		List<String> labels = new ArrayList<>();
+		for (int i = 0; i < groups.size() - 1; i++) {
+			labels.add(String.format("%s - %s", groups.get(i), groups.get(i + 1)));
+		}
+		labels.add(groups.getLast() + "+");
+//		groups.add(Double.MAX_VALUE);
 		return labels;
 	}
 
@@ -471,6 +461,22 @@ public class CycleAnalysis implements MATSimAppCommand {
 		StringColumn group = table.doubleColumn(valueLabel)
 			.map(dist -> cut(dist, groups, labels), ColumnType.STRING::create).setName(valueLabel + "_group");
 		table.addColumns(group);
+	}
+
+	private void addGroupStringColumn(Table table, String valueLabel, List<String> groups, List<String> labels) {
+		StringColumn group = table.stringColumn(valueLabel)
+			.map(dist -> cutString(dist, groups, labels), ColumnType.STRING::create).setName(valueLabel + "_group");
+		table.addColumns(group);
+	}
+
+	private static String cutString(String value, List<String> groups, List<String> labels) {
+		int idx = Collections.binarySearch(groups, value);
+
+		if (idx >= 0)
+			return labels.get(idx);
+
+		int ins = -(idx + 1);
+		return labels.get(ins - 1);
 	}
 
 	private static String cut(double value, List<Double> groups, List<String> labels) {

@@ -166,6 +166,7 @@ public final class LausitzSimWrapperRunner implements MATSimAppCommand {
 				String networkPath = ApplicationUtils.matchInput("output_network.xml.gz", runDirectory).toString();
 				String[] networkPathChunks = networkPath.split("/");
 				networkPath = networkPathChunks[networkPathChunks.length - 1];
+				System.out.println(networkPath);
 				sw.addDashboard(new CycleAnalysisDashboard(config.controller().getOutputDirectory(), Objects.requireNonNullElse(avroNetwork, networkPath)));
 			}
 

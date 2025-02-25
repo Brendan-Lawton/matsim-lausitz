@@ -25,6 +25,8 @@ public class CycleAnalysisDashboard implements Dashboard {
 	private static final String SOURCE = "source";
 	private static final String MAIN_MODE = "main_mode";
 	private static final String TRAFFIC = "bike_traffic";
+	private static final String ALTITUDES = "link_altitudes";
+
 
 
 	public CycleAnalysisDashboard(String basePath, String networkPath) {
@@ -103,7 +105,27 @@ public class CycleAnalysisDashboard implements Dashboard {
 
 			});
 
+		layout.row("Alt. Difference")
+			.el(MapPlot.class, (viz, data) -> {
+
+				viz.title = "Absolute Altitude Difference per Link (meters)";
+				viz.center = data.context().getCenter();
+				viz.zoom = data.context().mapZoomLevel;
+				viz.height = 7.5;
+				viz.width = 2.0;
+				viz.setShape("metropole_network.avro", "id");
+				viz.addDataset(ALTITUDES, data.compute(CycleAnalysis.class, "altitude_diff_by_link.csv"));
+				viz.display.lineColor.dataset = TRAFFIC;
+				viz.display.lineColor.columnName = "ALT_DIFF";
+				viz.display.lineColor.join = "LINK_ID";
+				viz.display.lineColor.setColorRamp(ColorScheme.RdYlBu, 10, true);
+
+			});
+
+
 	}
+
+
 
 	private static void createDistrobutionDataLayouts(Layout layout, String data_file, String title, String xAxis, String yAxis, String group_name, String row_name) {
 		layout.row(row_name)

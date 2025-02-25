@@ -16,7 +16,9 @@ import org.matsim.api.core.v01.events.LinkEnterEvent;
 import org.matsim.api.core.v01.events.PersonEntersVehicleEvent;
 import org.matsim.api.core.v01.events.handler.LinkEnterEventHandler;
 import org.matsim.api.core.v01.events.handler.PersonEntersVehicleEventHandler;
+import org.matsim.api.core.v01.network.Link;
 import org.matsim.api.core.v01.network.Network;
+import org.matsim.api.core.v01.network.NetworkFactory;
 import org.matsim.application.CommandSpec;
 import org.matsim.application.MATSimAppCommand;
 import org.matsim.application.options.CsvOptions;
@@ -27,6 +29,7 @@ import org.matsim.core.api.experimental.events.EventsManager;
 import org.matsim.core.config.groups.NetworkConfigGroup;
 import org.matsim.core.events.EventsUtils;
 import org.matsim.core.events.MatsimEventsReader;
+import org.matsim.core.network.NetworkUtils;
 import org.matsim.core.network.filter.NetworkFilterManager;
 import org.matsim.core.utils.io.IOUtils;
 import org.matsim.vehicles.Vehicle;
@@ -45,6 +48,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 import static java.lang.Math.abs;
+import static java.lang.Math.round;
 import static org.matsim.application.ApplicationUtils.globFile;
 import static tech.tablesaw.aggregate.AggregateFunctions.*;
 
@@ -53,7 +57,7 @@ import static tech.tablesaw.aggregate.AggregateFunctions.*;
 	requireRunDirectory=true,
 	produces = {"mode_share.csv", "mode_share_base.csv", "mode_shift.csv", "mean_travel_stats.csv", "bike_income_groups.csv", "bike_age_groups.csv",
 		"bike_traveled_distance_groups.csv", "bike_travel_time_groups.csv", "traffic_stats_by_road_type_and_hour.csv", "cyclist_demo_stats.csv",
-		"traffic_stats_by_link_daily_bike.csv"}
+		"traffic_stats_by_link_daily_bike.csv", "altitude_diff_by_link.csv"}
 )
 
 public class CycleAnalysis implements MATSimAppCommand {
@@ -108,7 +112,7 @@ public class CycleAnalysis implements MATSimAppCommand {
 		String eventsPath = globFile(input.getRunDirectory(), "*output_events.xml.gz").toString();
 		String personsPath = globFile(input.getRunDirectory(), "*output_persons.csv.gz").toString();
 		String tripsPath = globFile(input.getRunDirectory(), "*output_trips.csv.gz").toString();
-		String networkPath = globFile(input.getRunDirectory(), "*output_network.xml.gz").toString();
+		String networkPath = globFile(input.getRunDirectory(), "*network_resolutionHigh-with-pt.xml.gz").toString();
 		String trafficCsvPath = input.getRunDirectory() + "/analysis/traffic/traffic_stats_by_link_daily.csv";
 		Set<String> modes = Collections.singleton("bike");
 
@@ -119,6 +123,32 @@ public class CycleAnalysis implements MATSimAppCommand {
 		MatsimEventsReader reader = new MatsimEventsReader(manager);
 		reader.readFile(eventsPath);
 		manager.finishProcessing();
+
+		Network network = NetworkUtils.readNetwork(networkPath);
+
+//		Table network_nodes_altitude_diff = Table.create().addColumns(test);
+		ArrayList alt_diffs = new ArrayList<>();
+		ArrayList link_ids = new ArrayList<>();
+
+		double max_altitude = 150.0;
+
+		for (Link link : network.getLinks().values()) {
+			if (link.getToNode().getCoord().hasZ() && link.getFromNode().getCoord().hasZ()) {
+				Double alt_diff = abs(link.getToNode().getCoord().getZ() - link.getFromNode().getCoord().getZ());
+				if (alt_diff > max_altitude) { alt_diff = max_altitude; }
+				alt_diffs.add(Math.round(alt_diff));
+				link_ids.add(link.getId().toString());
+			}
+
+		}
+
+		DoubleColumn altDiffCol = DoubleColumn.create("ALT_DIFF", alt_diffs);
+		StringColumn linkIdCol = StringColumn.create("LINK_ID", link_ids);
+
+		Table altDiffTable = Table.create("alt_diff_table", altDiffCol, linkIdCol);
+
+		altDiffTable.write().csv(input.getRunDirectory() + "/analysis/analysis/altitude_diff_by_link.csv");
+
 
 //		read necessary tables
 		Table persons = Table.read().csv(CsvReadOptions.builder(IOUtils.getBufferedReader(personsPath))
@@ -217,6 +247,8 @@ public class CycleAnalysis implements MATSimAppCommand {
 
 		calcAndWriteMeanStats(bikeJoined);
 		calcAndWriteDemoStats(uniquePersonsBikeJoined);
+
+
 
 //		writeHighwaysShpFile();
 		bikeTraffic.write().csv(input.getRunDirectory() + "/analysis/analysis/traffic_stats_by_link_daily_bike.csv");

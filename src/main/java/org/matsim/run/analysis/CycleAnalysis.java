@@ -42,6 +42,8 @@ import tech.tablesaw.selection.Selection;
 
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.time.format.DateTimeFormatter;
@@ -54,7 +56,7 @@ import static tech.tablesaw.aggregate.AggregateFunctions.*;
 
 @CommandLine.Command(name = "cycle-highway", description = "Calculates various cycle highway related metrics.")
 @CommandSpec(
-	requireRunDirectory=true,
+	requireRunDirectory = true,
 	produces = {"mode_share.csv", "mode_share_base.csv", "mode_shift.csv", "mean_travel_stats.csv", "bike_income_groups.csv", "bike_age_groups.csv",
 		"bike_traveled_distance_groups.csv", "bike_travel_time_groups.csv", "traffic_stats_by_road_type_and_hour.csv", "cyclist_demo_stats.csv",
 		"traffic_stats_by_link_daily_bike.csv", "altitude_diff_by_link.csv"}
@@ -67,7 +69,7 @@ public class CycleAnalysis implements MATSimAppCommand {
 	private InputOptions input = InputOptions.ofCommand(CycleAnalysis.class);
 	@CommandLine.Mixin
 	private OutputOptions output = OutputOptions.ofCommand(CycleAnalysis.class);
-//	@CommandLine.Option(names = "--base-path", description = "Path to run directory of base case.", required = true)
+	//	@CommandLine.Option(names = "--base-path", description = "Path to run directory of base case.", required = true)
 //	private Path basePath;
 	@CommandLine.Mixin
 	private ShpOptions shp;
@@ -112,17 +114,17 @@ public class CycleAnalysis implements MATSimAppCommand {
 		String eventsPath = globFile(input.getRunDirectory(), "*output_events.xml.gz").toString();
 		String personsPath = globFile(input.getRunDirectory(), "*output_persons.csv.gz").toString();
 		String tripsPath = globFile(input.getRunDirectory(), "*output_trips.csv.gz").toString();
-		String networkPath = globFile(input.getRunDirectory(), "*network_resolutionHigh-with-pt.xml.gz").toString();
+		String networkPath = globFile(input.getRunDirectory(), "*network*.xml.gz").toString();
 		String trafficCsvPath = input.getRunDirectory() + "/analysis/traffic/traffic_stats_by_link_daily.csv";
 		Set<String> modes = Collections.singleton("bike");
 
-		EventsManager manager = EventsUtils.createEventsManager();
-		manager.addHandler(new CycleHighwayEventHandler());
-		manager.initProcessing();
+//		EventsManager manager = EventsUtils.createEventsManager();
+//		manager.addHandler(new CycleHighwayEventHandler());
+//		manager.initProcessing();
 
-		MatsimEventsReader reader = new MatsimEventsReader(manager);
-		reader.readFile(eventsPath);
-		manager.finishProcessing();
+//		MatsimEventsReader reader = new MatsimEventsReader(manager);
+//		reader.readFile(eventsPath);
+//		manager.finishProcessing();
 
 		Network network = NetworkUtils.readNetwork(networkPath);
 
@@ -131,23 +133,22 @@ public class CycleAnalysis implements MATSimAppCommand {
 		ArrayList link_ids = new ArrayList<>();
 
 		double max_altitude = 150.0;
+		boolean map_with_zCoord = true;
 
 		for (Link link : network.getLinks().values()) {
 			if (link.getToNode().getCoord().hasZ() && link.getFromNode().getCoord().hasZ()) {
 				Double alt_diff = abs(link.getToNode().getCoord().getZ() - link.getFromNode().getCoord().getZ());
-				if (alt_diff > max_altitude) { alt_diff = max_altitude; }
+				if (alt_diff > max_altitude) {
+					alt_diff = max_altitude;
+				}
 				alt_diffs.add(Math.round(alt_diff));
 				link_ids.add(link.getId().toString());
+			} else {
+				map_with_zCoord = false;
+				break;
 			}
 
 		}
-
-		DoubleColumn altDiffCol = DoubleColumn.create("ALT_DIFF", alt_diffs);
-		StringColumn linkIdCol = StringColumn.create("LINK_ID", link_ids);
-
-		Table altDiffTable = Table.create("alt_diff_table", altDiffCol, linkIdCol);
-
-		altDiffTable.write().csv(input.getRunDirectory() + "/analysis/analysis/altitude_diff_by_link.csv");
 
 
 //		read necessary tables
@@ -171,17 +172,9 @@ public class CycleAnalysis implements MATSimAppCommand {
 			Map.entry("simulated_traffic_volume", ColumnType.DOUBLE), Map.entry("vol_truck40t", ColumnType.DOUBLE), Map.entry("vol_truck8t", ColumnType.DOUBLE),
 			Map.entry("vol_longDistanceFreight", ColumnType.DOUBLE), Map.entry("vol_truck18t", ColumnType.DOUBLE), Map.entry("vol_bike", ColumnType.DOUBLE), Map.entry("vol_car", ColumnType.DOUBLE)));
 
-		Table traffic = Table.read().csv(CsvReadOptions.builder(IOUtils.getBufferedReader(trafficCsvPath))
-			.columnTypesPartial(trafficColumnTypes)
-			.sample(false)
-			.separator(CsvOptions.detectDelimiter(trafficCsvPath)).build());
-
-		Table bikeTraffic = filterBikeTrafficCsv(traffic);
-
 
 //		only analyze person agents
 		persons = filterPersonAgents(persons);
-
 
 //		create labels for dist and income groups
 		List<String> distLabels = getLabels(distGroups);
@@ -196,7 +189,7 @@ public class CycleAnalysis implements MATSimAppCommand {
 				trips.stringColumn(LONG_MODE));
 
 		//		calc modal split for base and policy
-		writeModeShare(trips, persons, distLabels,  "mode_share.csv");
+		writeModeShare(trips, persons, distLabels, "mode_share.csv");
 
 		// 		add group columns for dist and income
 		addGroupColumn(persons, INCOME, incomeGroups, incomeLabels);
@@ -211,10 +204,39 @@ public class CycleAnalysis implements MATSimAppCommand {
 
 		//		write income group distr for mode bike in policy and base
 
-		writeGroups(joined, incomeLabels, TransportMode.bike,  "_income_groups.csv", "income_group");
-		writeGroups(joined, ageLabels, TransportMode.bike,  "_age_groups.csv", "age_group");
-		writeGroups(joined, distLabels, TransportMode.bike,  "_traveled_distance_groups.csv", "traveled_distance_group");
-		writeGroups(joined, travTimeLabels, TransportMode.bike,  "_travel_time_groups.csv", "trav_time_group");
+		writeGroups(joined, incomeLabels, TransportMode.bike, "_income_groups.csv", "income_group");
+		writeGroups(joined, ageLabels, TransportMode.bike, "_age_groups.csv", "age_group");
+		writeGroups(joined, distLabels, TransportMode.bike, "_traveled_distance_groups.csv", "traveled_distance_group");
+		writeGroups(joined, travTimeLabels, TransportMode.bike, "_travel_time_groups.csv", "trav_time_group");
+
+		if (map_with_zCoord) {
+			DoubleColumn altDiffCol = DoubleColumn.create("ALT_DIFF", alt_diffs);
+			StringColumn linkIdCol = StringColumn.create("LINK_ID", link_ids);
+
+			Table altDiffTable = Table.create("alt_diff_table", altDiffCol, linkIdCol);
+
+			altDiffTable.write().csv(input.getRunDirectory() + "/analysis/analysis/altitude_diff_by_link.csv");
+		} else {
+			DoubleColumn emptyCol = DoubleColumn.create("empty", 0);
+
+			Table altDiffTable = Table.create("alt_diff_table", emptyCol);
+			altDiffTable.write().csv(input.getRunDirectory() + "/analysis/analysis/altitude_diff_by_link.csv");
+		}
+
+		if (Files.exists(Path.of(trafficCsvPath))) {
+			Table traffic = Table.read().csv(CsvReadOptions.builder(IOUtils.getBufferedReader(trafficCsvPath))
+				.columnTypesPartial(trafficColumnTypes)
+				.sample(false)
+				.separator(CsvOptions.detectDelimiter(trafficCsvPath)).build());
+
+			Table bikeTraffic = filterBikeTrafficCsv(traffic);
+			bikeTraffic.write().csv(input.getRunDirectory() + "/analysis/analysis/traffic_stats_by_link_daily_bike.csv");
+		} else {
+			DoubleColumn emptyCol = DoubleColumn.create("empty", 0);
+			Table bikeTraffic = Table.create("empty data", emptyCol);
+			bikeTraffic.write().csv(input.getRunDirectory() + "/analysis/analysis/traffic_stats_by_link_daily_bike.csv");
+
+		}
 
 
 //		filter for bike trips
@@ -248,12 +270,6 @@ public class CycleAnalysis implements MATSimAppCommand {
 		calcAndWriteMeanStats(bikeJoined);
 		calcAndWriteDemoStats(uniquePersonsBikeJoined);
 
-
-
-//		writeHighwaysShpFile();
-		bikeTraffic.write().csv(input.getRunDirectory() + "/analysis/analysis/traffic_stats_by_link_daily_bike.csv");
-
-
 		return 0;
 	}
 
@@ -265,7 +281,7 @@ public class CycleAnalysis implements MATSimAppCommand {
 		double femaleCyclists = 0;
 		double numOfAgents = uniqueAgents.stringColumn("sex").size();
 
-		for (String gender: uniqueAgents.stringColumn("sex")) {
+		for (String gender : uniqueAgents.stringColumn("sex")) {
 			if (gender.equals("m")) {
 				maleCyclists++;
 			} else if (gender.equals("f")) {
@@ -319,12 +335,13 @@ public class CycleAnalysis implements MATSimAppCommand {
 		long medianTravTimeSec = (long) medianTravTime;
 
 		long hoursMean = meanTravTimeSec / 3600;
-		long minutesMean = abs((hoursMean*60) - meanTravTimeSec / 60);
-		long secondsMean= (long) (((meanTravTimeSec / 60.0) - minutesMean) * 60.0);
+		long minutesMean = abs((hoursMean * 60) - meanTravTimeSec / 60);
+		long secondsMean = (long) (((meanTravTimeSec / 60.0) - minutesMean) * 60.0);
 
 		long hoursMedian = medianTravTimeSec / 3600;
 		long minutesMedian = abs(hoursMedian - medianTravTimeSec / 60);
-		long secondsMedian = (long) (((medianTravTimeSec / 60.0) - minutesMedian) * 60.0);;
+		long secondsMedian = (long) (((medianTravTimeSec / 60.0) - minutesMedian) * 60.0);
+		;
 
 		String meanTravTimeFormatted = String.format("%02d:%02d:%02d", hoursMean, minutesMean, secondsMean);
 		String medianTravTimeFormatted = String.format("%02d:%02d:%02d", hoursMedian, minutesMedian, secondsMedian);
@@ -405,7 +422,7 @@ public class CycleAnalysis implements MATSimAppCommand {
 
 	private void writeGroups(Table joined, List<String> labels, String mode, String outputFile, String columnName) {
 		//		only filter if specific mode is given
-		if (!mode.equals("allModes")){
+		if (!mode.equals("allModes")) {
 			joined = filterModeAgents(joined, mode);
 		}
 

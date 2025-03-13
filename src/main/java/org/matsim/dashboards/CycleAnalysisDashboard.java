@@ -6,6 +6,8 @@ import org.matsim.simwrapper.Header;
 import org.matsim.simwrapper.viz.*;
 import tech.tablesaw.plotly.traces.BarTrace;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -44,20 +46,26 @@ public class CycleAnalysisDashboard implements Dashboard {
 		header.title = "Bike Dashboard";
 		header.description = "Shows statistics about agents, who used bike as their main mode.";
 
+		layout.tab("General Data", "Allg. Daten");
+		layout.tab("Avg. Speed Map", "durschn. Geschwindigkeitskarte");
+		layout.tab("Alt. Difference Map", "Höhenunterschiedskarte");
+
+
+
 //		String shp = "/home/brendan/git/matsim-lausitz/output/output-lausitz-1pct/lausitz-1pct.output_network.xml.gz";
 		String[] args = new ArrayList<>(List.of("--base-path", basePath)).toArray(new String[0]);
-		layout.row("first")
+		layout.row("first", "General Data")
 			.el(Tile.class, (viz, data) -> {
 				viz.dataset = data.compute(CycleAnalysis.class, "mean_travel_stats.csv");
 				viz.height = 0.1;
 			});
-		layout.row("second")
+		layout.row("second", "General Data")
 			.el(Tile.class, (viz, data) -> {
 				viz.dataset = data.compute(CycleAnalysis.class, "cyclist_demo_stats.csv");
 				viz.height = 0.1;
 			});
 
-		layout.row("modalSplit")
+		layout.row("modalSplit", "General Data")
 			.el(Plotly.class, (viz, data) -> {
 				viz.title = "Modal split";
 
@@ -84,43 +92,46 @@ public class CycleAnalysisDashboard implements Dashboard {
 		createDistrobutionDataLayouts(layout, "bike_traveled_distance_groups.csv", "Bike users per traveled distance", "Traveled Distance","Share Agents", "traveled_distance_group", "trav_distAndTime_row");
 		createDistrobutionDataLayouts(layout, "bike_travel_time_groups.csv", "Bike users per traveled distance", "Travel Time","Share Agents", "trav_time_group", "trav_distAndTime_row");
 
-		layout.row("Avg. Speed")
-			.el(MapPlot.class, (viz, data) -> {
+			layout.row("Avg. Speed", "Avg. Speed Map")
+				.el(MapPlot.class, (viz, data) -> {
 
-				viz.title = "Simulated Average Speed per Link by bike";
-				viz.center = data.context().getCenter();
-				viz.zoom = data.context().mapZoomLevel;
-				viz.height = 7.5;
-				viz.width = 2.0;
-				viz.setShape(networkPath, "id");
-				viz.addDataset(TRAFFIC, data.compute(CycleAnalysis.class, "traffic_stats_by_link_daily_bike.csv"));
-				viz.display.lineColor.dataset = TRAFFIC;
-				viz.display.lineColor.columnName = "avg_speed";
-				viz.display.lineColor.join = "link_id";
-				viz.display.lineColor.setColorRamp(ColorScheme.RdYlBu, 3, true);
-				viz.display.lineWidth.dataset = TRAFFIC;
-				viz.display.lineWidth.columnName = "avg_speed";
-				viz.display.lineWidth.scaleFactor = 15d;
-				viz.display.lineWidth.join = "link_id";
+					viz.title = "Simulated Average Speed per Link by bike";
+					viz.center = data.context().getCenter();
+					viz.zoom = data.context().mapZoomLevel;
+					viz.height = 7.5;
+					viz.width = 2.0;
+					viz.setShape(networkPath, "id");
+					viz.addDataset(TRAFFIC, data.compute(CycleAnalysis.class, "traffic_stats_by_link_daily_bike.csv"));
+					viz.display.lineColor.dataset = TRAFFIC;
+					viz.display.lineColor.columnName = "avg_speed";
+					viz.display.lineColor.join = "link_id";
+					viz.display.lineColor.setColorRamp(ColorScheme.RdYlBu, 3, true);
+					viz.display.lineWidth.dataset = TRAFFIC;
+					viz.display.lineWidth.columnName = "avg_speed";
+					viz.display.lineWidth.scaleFactor = 15d;
+					viz.display.lineWidth.join = "link_id";
 
-			});
+				});
 
-		layout.row("Alt. Difference")
-			.el(MapPlot.class, (viz, data) -> {
 
-				viz.title = "Absolute Altitude Difference per Link (meters)";
-				viz.center = data.context().getCenter();
-				viz.zoom = data.context().mapZoomLevel;
-				viz.height = 7.5;
-				viz.width = 2.0;
-				viz.setShape("metropole_network.avro", "id");
-				viz.addDataset(ALTITUDES, data.compute(CycleAnalysis.class, "altitude_diff_by_link.csv"));
-				viz.display.lineColor.dataset = TRAFFIC;
-				viz.display.lineColor.columnName = "ALT_DIFF";
-				viz.display.lineColor.join = "LINK_ID";
-				viz.display.lineColor.setColorRamp(ColorScheme.RdYlBu, 10, true);
+			layout.row("Alt. Difference", "Alt. Difference Map")
+				.el(MapPlot.class, (viz, data) -> {
 
-			});
+					viz.title = "Absolute Altitude Difference per Link (meters)";
+					viz.center = data.context().getCenter();
+					viz.zoom = data.context().mapZoomLevel;
+					viz.height = 7.5;
+					viz.width = 2.0;
+					viz.setShape(networkPath, "id");
+					viz.addDataset(ALTITUDES, data.compute(CycleAnalysis.class, "altitude_diff_by_link.csv"));
+					viz.display.lineColor.dataset = TRAFFIC;
+					viz.display.lineColor.columnName = "ALT_DIFF";
+					viz.display.lineColor.join = "LINK_ID";
+					viz.display.lineColor.setColorRamp(ColorScheme.RdYlBu, 10, true);
+
+				});
+
+
 
 
 	}
@@ -128,7 +139,7 @@ public class CycleAnalysisDashboard implements Dashboard {
 
 
 	private static void createDistrobutionDataLayouts(Layout layout, String data_file, String title, String xAxis, String yAxis, String group_name, String row_name) {
-		layout.row(row_name)
+		layout.row(row_name, "General Data")
 			.el(Bar.class, (viz, data) -> {
 				viz.title = title;
 				viz.stacked = false;
